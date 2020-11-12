@@ -84,11 +84,21 @@ def create_dataset(avg):
         'Wyoming': 'WY'
     }
 
+    #We have to normalize the data by state population
+    #We're using the US Census Bureau data 2019 estimates
+    state_pop_df=pd.read_csv('SCPRC-EST2019-18+POP-RES.csv')
+
     #Build y_value column
     new_cases_per_state_per_day=[]
     for index, row in mobility_df.iterrows():
         date=row['date']
         state=state_dict[row['sub_region_1']]
+
+        #get state population, then divide by 100,000, since we'll regulate by per 100,000 people in the state
+        state_pop_filtered=state_pop_df[state_pop_df['NAME']==row['sub_region_1']]
+        if(len(state_pop_filtered)!=1):
+            print("HELP! I'm having issues filtering for the state population")
+        state_pop=float(state_pop_filtered['POPESTIMATE2019'].fillna(0))/100000
 
         if(avg):
             num_cases=0
@@ -96,10 +106,10 @@ def create_dataset(avg):
             match=match.fillna(0)
             for i, r in match.iterrows():
                 num_cases+=float(r['new_case'])+float(r['pnew_case'])
-            new_cases_per_state_per_day.append(num_cases/7)
+            new_cases_per_state_per_day.append(num_cases/(7*state_pop))
         else:
             match=cdc_df[(cdc_df['submission_date']==date)&(cdc_df['state']==state)]
-            new_cases_per_state_per_day.append(float(match['new_case'].fillna(0))+float(match['pnew_case'].fillna(0)))
+            new_cases_per_state_per_day.append((float(match['new_case'].fillna(0))+float(match['pnew_case'].fillna(0)))/state_pop)
 
     mobility_df['num_cases']=new_cases_per_state_per_day
 
@@ -112,3 +122,4 @@ def create_dataset(avg):
 if __name__ == '__main__':
     #Create dataset
     create_dataset(True)
+    create_dataset(False)
