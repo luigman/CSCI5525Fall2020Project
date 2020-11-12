@@ -39,10 +39,11 @@ def baseline():
         mobility_dataframe_truc = mobility_dataframe.drop(columns=['date'])
         full_dataframe = pd.concat([cdc_dataframe_truc, mobility_dataframe_truc], axis=1)
         full_dataframe_noDate = full_dataframe.drop(columns=['submission_date'])
+        full_dataframe_noDate = full_dataframe_noDate.loc[(full_dataframe_noDate['newAndPnew']!=0)] #remove rows with zero cases
 
         #Compute linear and logatrithmic correlations
-        linearCorr = full_dataframe.corr()
-        linearCorr = linearCorr.to_numpy()[0,1:] #Take only correlations between 'cases' and mobility data
+        linearCorr = full_dataframe_noDate.corr()
+        linearCorr = linearCorr.to_numpy()[0,0:] #Take only correlations between 'cases' and mobility data
 
         logData = np.log(full_dataframe_noDate+1-np.min(full_dataframe_noDate.to_numpy()))
         logCorr = logData.corr()
@@ -118,16 +119,23 @@ def baseline():
     logDNNMSE = []
     logDNNMSEAdj = []
 
-    for month in range(7):
-        linearTrainX = bestLinearData.to_numpy()[month*30:(month+1)*30,1:]
-        linearTrainy = bestLinearData.to_numpy()[month*30:(month+1)*30,:1]
-        logTrainX = bestLogData.to_numpy()[month*30:(month+1)*30,1:]
-        logTrainy = bestLogData.to_numpy()[month*30:(month+1)*30,:1]
+    #Convert data to numpy
+    bestLinearData = bestLinearData.to_numpy()
+    bestLogData = bestLogData.to_numpy()
 
-        linearTestX = bestLinearData.to_numpy()[(month+1)*30:(month+2)*30,1:]
-        linearTesty = bestLinearData.to_numpy()[(month+1)*30:(month+2)*30,:1]
-        logTestX = bestLogData.to_numpy()[(month+1)*30:(month+2)*30,1:]
-        logTesty = bestLogData.to_numpy()[(month+1)*30:(month+2)*30,:1]
+    stride = 30 #trains a new model every {stride} days
+    print((min(bestLinearData.shape[0], bestLogData.shape[0])-30)//stride)
+
+    for t in range((min(bestLinearData.shape[0], bestLogData.shape[0])-30)//stride):
+        linearTrainX = bestLinearData[t*stride:(t+1)*stride,1:]
+        linearTrainy = bestLinearData[t*stride:(t+1)*stride,:1]
+        logTrainX = bestLogData[t*stride:(t+1)*stride,1:]
+        logTrainy = bestLogData[t*stride:(t+1)*stride,:1]
+
+        linearTestX = bestLinearData[(t+1)*stride:(t+2)*stride,1:]
+        linearTesty = bestLinearData[(t+1)*stride:(t+2)*stride,:1]
+        logTestX = bestLogData[(t+1)*stride:(t+2)*stride,1:]
+        logTesty = bestLogData[(t+1)*stride:(t+2)*stride,:1]
 
         #fit linear model
         linHistory = linear_model.fit(linearTrainX, linearTrainy, epochs=100,verbose=0)
@@ -173,8 +181,7 @@ def baseline():
 
         reset_weights(dnn_model)
         
-    print(np.array(linearMSE).shape)
-    print(np.array(logMSE).shape)
+        
     plt.plot(np.array(linearMSE).mean(axis=0), label='Linear')
     plt.plot(np.array(logMSEAdj).mean(axis=0), label='Log Adjusted')
     plt.plot(np.array(linearDNNMSE).mean(axis=0), label='Linear DNN')
