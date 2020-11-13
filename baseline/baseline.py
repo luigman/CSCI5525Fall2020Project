@@ -9,6 +9,8 @@ from tensorflow import keras
 from tensorflow.keras import layers
 from tensorflow.keras.layers.experimental import preprocessing
 
+from sklearn.linear_model import LinearRegression
+
 def baseline():
     showPlot = False
     np.set_printoptions(precision=3, suppress=True)
@@ -79,11 +81,11 @@ def baseline():
         plt.title("Logarithmic correlation vs. data offset")
         plt.show()
 
-        sns.pairplot(bestLinearData[['newAndPnew','retail_and_recreation_percent_change_from_baseline', 'grocery_and_pharmacy_percent_change_from_baseline', 'parks_percent_change_from_baseline', 'workplaces_percent_change_from_baseline', 'residential_percent_change_from_baseline','originalCases']], diag_kind='kde')
-        plt.show()
+        #sns.pairplot(bestLinearData[['newAndPnew','retail_and_recreation_percent_change_from_baseline', 'grocery_and_pharmacy_percent_change_from_baseline', 'parks_percent_change_from_baseline', 'workplaces_percent_change_from_baseline', 'residential_percent_change_from_baseline','originalCases']], diag_kind='kde')
+        #plt.show()
 
-        sns.pairplot(bestLogData[['newAndPnew','retail_and_recreation_percent_change_from_baseline', 'grocery_and_pharmacy_percent_change_from_baseline', 'parks_percent_change_from_baseline', 'workplaces_percent_change_from_baseline', 'residential_percent_change_from_baseline','originalCases']], diag_kind='kde')
-        plt.show()
+        #sns.pairplot(bestLogData[['newAndPnew','retail_and_recreation_percent_change_from_baseline', 'grocery_and_pharmacy_percent_change_from_baseline', 'parks_percent_change_from_baseline', 'workplaces_percent_change_from_baseline', 'residential_percent_change_from_baseline','originalCases']], diag_kind='kde')
+        #plt.show()
 
     print("Best Full Correlation:", bestLinearCorr)
     print("Best Full Correlation Norm:", np.linalg.norm(bestLinearCorr))
@@ -96,16 +98,17 @@ def baseline():
     #Define models
 
     normalizer = preprocessing.Normalization()
+    caseNormalizer = preprocessing.Normalization()
 
     linear_model = tf.keras.Sequential([
-    #normalizer,
+    normalizer,
     layers.Dense(units=1)
     ])
 
     linear_model.compile(optimizer=tf.optimizers.Adam(learning_rate=0.1), loss='mean_absolute_error')
 
     dnn_model = keras.Sequential([
-      #normalizer,
+      normalizer,
       layers.Dense(64, activation='relu'),
       layers.Dense(64, activation='relu'),
       layers.Dense(1)
@@ -113,12 +116,22 @@ def baseline():
 
     dnn_model.compile(loss='mean_absolute_error', optimizer=tf.keras.optimizers.Adam(0.001))
 
+    cases_model = tf.keras.Sequential([
+      layers.Dense(units=1)
+    ])
+
+    cases_model.compile(loss='mean_absolute_error', optimizer=tf.keras.optimizers.Adam(0.001))
+
     linearMSE = []
     logMSEAdj = []
     linearDNNMSE = []
     logDNNMSEAdj = []
+    linearCasesMSE = []
+    logCasesMSE = []
 
     #Convert data to numpy
+    linearCasesOnly = bestLinearData['originalCases'].to_numpy()
+    logCasesOnly = np.log(linearCasesOnly+1)
     bestLinearData = bestLinearData.to_numpy()
     bestLogData = bestLogData.to_numpy()
 
@@ -129,21 +142,21 @@ def baseline():
         print("Training model:",t)
         linearTrainX = bestLinearData[t*stride:t*stride+30,1:]
         linearTrainy = bestLinearData[t*stride:t*stride+30,:1]
+        logTrainy2 = np.log(linearTrainy+1)
         logTrainX = bestLogData[t*stride:t*stride+30,1:]
         logTrainy = bestLogData[t*stride:t*stride+30,:1]
+        linearCasesTrainX = linearCasesOnly[t*stride:t*stride+30]
+        logCasesTrainX = logCasesOnly[t*stride:t*stride+30]
 
         linearTestX = bestLinearData[t*stride+30:t*stride+60,1:]
         linearTesty = bestLinearData[t*stride+30:t*stride+60,:1]
         logTestX = bestLogData[t*stride+30:t*stride+60,1:]
         logTesty = bestLogData[t*stride+30:t*stride+60,:1]
+        linearCasesTestX = linearCasesOnly[t*stride+30:t*stride+60]
+        logCasesTestX = logCasesOnly[t*stride+30:t*stride+60]
 
-        #Manually normalize (test)
-        normalizer.adapt(linearTrainX)
-        print(normalizer(linearTrainX))
-        #linearTrainX = (linearTrainX - linearTrainX.mean(axis=0)) / linearTrainX.var(axis=0)
-        #logTrainX = (logTrainX - logTrainX.mean(axis=0)) / logTrainX.var(axis=0)
-        #linearTestX = (linearTestX - linearTestX.mean(axis=0)) / linearTestX.var(axis=0)
-        #logTestX = (logTestX - logTestX.mean(axis=0)) / logTestX.var(axis=0)
+        timeTrain = np.arange(1,31).reshape(-1, 1)
+        timeTest = np.arange(31,61).reshape(-1, 1)
 
         #fit linear model
         linHistory = linear_model.fit(linearTrainX, linearTrainy, epochs=maxEpoch,verbose=0)
@@ -179,15 +192,36 @@ def baseline():
         evaluate = dnn_model.evaluate(logTestX, logTesty, verbose=0)
         predict = dnn_model.predict(logTestX, verbose=0)
         predictAdj = np.exp(predict)-1+np.min(full_dataframe_noDate.to_numpy()) #convert from log back to raw case number
-        print(predictAdj-linearTesty)
+        #print(predictAdj-linearTesty)
         logDNNMSEAdj.append(np.abs(predictAdj-linearTesty)/linearTesty)
 
         reset_weights(dnn_model)
+
+        #fit linear cases only model
+        cases_model = LinearRegression().fit(timeTrain, linearCasesTrainX)
+        if showPlot:
+          visualize_cases(cases_model, timeTrain, linearCasesTrainX, timeTest, linearCasesTestX)
+
+        predict = cases_model.predict(timeTest)
+        linearCasesMSE.append(np.abs(predict-linearCasesTestX)/linearCasesTestX)
+
+        #fit log cases only model
+        cases_model = LinearRegression().fit(np.log(timeTrain), logCasesTrainX)
+        if showPlot:
+          visualize_cases(cases_model, np.log(timeTrain), logCasesTrainX, np.log(timeTest), logCasesTestX)
+
+        predict = cases_model.predict(np.log(timeTest))
+        predictAdj = np.exp(predict)-1 #convert from log back to raw case number
+        logCasesMSE.append(np.abs(predictAdj-linearCasesTestX)/linearCasesTestX)
+
+
 
     plt.plot(np.array(linearMSE).mean(axis=0), label='Linear')
     plt.plot(np.array(logMSEAdj).mean(axis=0), label='Log Adjusted')
     plt.plot(np.array(linearDNNMSE).mean(axis=0), label='Linear DNN')
     plt.plot(np.array(logDNNMSEAdj).mean(axis=0), label='Log DNN Adjusted')
+    plt.plot(np.array(linearCasesMSE).mean(axis=0), label='Linear Cases')
+    plt.plot(np.array(logCasesMSE).mean(axis=0), label='Log Cases')
     plt.legend(loc="upper left")
     plt.show()
 
@@ -206,6 +240,22 @@ def reset_weights(model):
       var = getattr(layer, k.replace("_initializer", ""))
       var.assign(initializer(var.shape, var.dtype))
 
+def reset_layer_weight(layer):
+  for k, initializer in layer.__dict__.items():
+      if "initializer" not in k:
+        continue
+      # find the corresponding variable
+      var = getattr(layer, k.replace("_initializer", ""))
+      var.assign(initializer(var.shape, var.dtype))
+
+  return
+
+def visualize_cases(model, trainX, trainy, testX, testy):
+  plt.scatter(trainX, trainy)
+  plt.scatter(testX, testy)
+  x=np.linspace(min(np.min(trainX),np.min(testX)),max(np.max(trainX),np.max(testX)),100).reshape(-1, 1)
+  plt.scatter(x,model.predict(x))
+  plt.show()
 
 if __name__ == '__main__':
     baseline()
