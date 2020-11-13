@@ -9,10 +9,10 @@ from tensorflow import keras
 from tensorflow.keras import layers
 from tensorflow.keras.layers.experimental import preprocessing
 
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import LinearRegression, Ridge
 
 def baseline():
-    showPlot = False
+    showPlot = True
     np.set_printoptions(precision=3, suppress=True)
 
     mobility_dataframe = pd.read_csv('google_baseline_test.csv', infer_datetime_format=True, parse_dates=True)
@@ -95,37 +95,8 @@ def baseline():
     print("Best Log Correlation Norm:", np.linalg.norm(bestLogCorr))
     print("Best Log Offset:", bestLogOffset)
 
-    #Define models
-
-    normalizer = preprocessing.Normalization()
-    caseNormalizer = preprocessing.Normalization()
-
-    linear_model = tf.keras.Sequential([
-    normalizer,
-    layers.Dense(units=1)
-    ])
-
-    linear_model.compile(optimizer=tf.optimizers.Adam(learning_rate=0.1), loss='mean_absolute_error')
-
-    dnn_model = keras.Sequential([
-      normalizer,
-      layers.Dense(64, activation='relu'),
-      layers.Dense(64, activation='relu'),
-      layers.Dense(1)
-    ])
-
-    dnn_model.compile(loss='mean_absolute_error', optimizer=tf.keras.optimizers.Adam(0.001))
-
-    cases_model = tf.keras.Sequential([
-      layers.Dense(units=1)
-    ])
-
-    cases_model.compile(loss='mean_absolute_error', optimizer=tf.keras.optimizers.Adam(0.001))
-
     linearMSE = []
     logMSEAdj = []
-    linearDNNMSE = []
-    logDNNMSEAdj = []
     linearCasesMSE = []
     logCasesMSE = []
 
@@ -135,7 +106,7 @@ def baseline():
     bestLinearData = bestLinearData.to_numpy()
     bestLogData = bestLogData.to_numpy()
 
-    stride = 10 #trains a new model every {stride} days
+    stride = 1 #trains a new model every {stride} days
     maxEpoch = 100
 
     for t in range((min(bestLinearData.shape[0], bestLogData.shape[0])-60)//stride):
@@ -158,44 +129,25 @@ def baseline():
         timeTrain = np.arange(1,31).reshape(-1, 1)
         timeTest = np.arange(31,61).reshape(-1, 1)
 
-        #fit linear model
-        linHistory = linear_model.fit(linearTrainX, linearTrainy, epochs=maxEpoch,verbose=0)
+        #Uncomment to add time data to mobility dataset
+        #linearTrainX = np.hstack((linearTrainX, timeTrain))
+        #logTrainX = np.hstack((logTrainX, timeTrain))
+        #linearTestX = np.hstack((linearTestX, timeTest))
+        #logTestX = np.hstack((logTestX, timeTest))
 
-        evaluate = linear_model.evaluate(linearTestX, linearTesty, verbose=0)
-        predict = linear_model.predict(linearTestX, verbose=0)
+
+        #fit linear model
+        linear_model = Ridge(alpha=1.0).fit(linearTrainX, linearTrainy)
+
+        predict = linear_model.predict(linearTestX)
         linearMSE.append(np.abs(predict-linearTesty)/linearTesty)
 
-        reset_weights(linear_model)
-
         #fit log model
-        logHistory = linear_model.fit(logTrainX, logTrainy, epochs=maxEpoch,verbose=0)
+        linear_model = Ridge(alpha=1.0).fit(logTrainX, logTrainy)
 
-        evaluate = linear_model.evaluate(logTestX, logTesty, verbose=0)
-        predict = linear_model.predict(logTestX, verbose=0)
+        predict = linear_model.predict(logTestX)
         predictAdj = np.exp(predict)-1+np.min(full_dataframe_noDate.to_numpy()) #convert from log back to raw case number
         logMSEAdj.append(np.abs(predictAdj-linearTesty)/linearTesty)
-
-        reset_weights(linear_model)
-
-        #fit linear DNN model
-        linHistory = dnn_model.fit(linearTrainX, linearTrainy, epochs=maxEpoch,verbose=0)
-
-        evaluate = dnn_model.evaluate(linearTestX, linearTesty, verbose=0)
-        predict = dnn_model.predict(linearTestX, verbose=0)
-        linearDNNMSE.append(np.abs(predict-linearTesty)/linearTesty)
-
-        reset_weights(dnn_model)
-
-        #fit log DNN model
-        logHistory = dnn_model.fit(logTrainX, logTrainy, epochs=maxEpoch,verbose=0)
-
-        evaluate = dnn_model.evaluate(logTestX, logTesty, verbose=0)
-        predict = dnn_model.predict(logTestX, verbose=0)
-        predictAdj = np.exp(predict)-1+np.min(full_dataframe_noDate.to_numpy()) #convert from log back to raw case number
-        #print(predictAdj-linearTesty)
-        logDNNMSEAdj.append(np.abs(predictAdj-linearTesty)/linearTesty)
-
-        reset_weights(dnn_model)
 
         #fit linear cases only model
         cases_model = LinearRegression().fit(timeTrain, linearCasesTrainX)
@@ -216,39 +168,14 @@ def baseline():
 
 
 
-    plt.plot(np.array(linearMSE).mean(axis=0), label='Linear')
-    plt.plot(np.array(logMSEAdj).mean(axis=0), label='Log Adjusted')
-    plt.plot(np.array(linearDNNMSE).mean(axis=0), label='Linear DNN')
-    plt.plot(np.array(logDNNMSEAdj).mean(axis=0), label='Log DNN Adjusted')
-    plt.plot(np.array(linearCasesMSE).mean(axis=0), label='Linear Cases')
-    plt.plot(np.array(logCasesMSE).mean(axis=0), label='Log Cases')
+    plt.plot(np.array(linearMSE).mean(axis=0), label='Mobility (linear, non-temporal)')
+    plt.plot(np.array(logMSEAdj).mean(axis=0), label='Mobility (logarithmic, non-temporal)')
+    plt.plot(np.array(linearCasesMSE).mean(axis=0), label='Cases (linear, temporal)')
+    plt.plot(np.array(logCasesMSE).mean(axis=0), label='Cases (logarithmic temporal)')
+    plt.xlabel("Days in advance to predict")
+    plt.ylabel("Percent deviation from true value")
     plt.legend(loc="upper left")
     plt.show()
-
-
-#Reset weights from:
-#https://github.com/keras-team/keras/issues/341
-def reset_weights(model):
-  for layer in model.layers: 
-    if isinstance(layer, tf.keras.Model):
-      reset_weights(layer)
-      continue
-    for k, initializer in layer.__dict__.items():
-      if "initializer" not in k:
-        continue
-      # find the corresponding variable
-      var = getattr(layer, k.replace("_initializer", ""))
-      var.assign(initializer(var.shape, var.dtype))
-
-def reset_layer_weight(layer):
-  for k, initializer in layer.__dict__.items():
-      if "initializer" not in k:
-        continue
-      # find the corresponding variable
-      var = getattr(layer, k.replace("_initializer", ""))
-      var.assign(initializer(var.shape, var.dtype))
-
-  return
 
 def visualize_cases(model, trainX, trainy, testX, testy):
   plt.scatter(trainX, trainy)
