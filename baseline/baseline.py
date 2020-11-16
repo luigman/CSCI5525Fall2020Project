@@ -10,6 +10,16 @@ from tensorflow.keras import layers
 from tensorflow.keras.layers.experimental import preprocessing
 
 from sklearn.linear_model import LinearRegression, Ridge, RidgeCV
+from sklearn.svm import LinearSVR
+from sklearn.ensemble import StackingRegressor, RandomForestClassifier
+from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.gaussian_process.kernels import DotProduct, WhiteKernel
+
+from pmdarima import auto_arima
+# Ignore harmless warnings 
+import warnings 
+warnings.filterwarnings("ignore") 
+from statsmodels.tsa.statespace.sarimax import SARIMAX 
 
 from scipy import optimize
 
@@ -103,6 +113,7 @@ def baseline():
     logCasesMSE = []
     logisticMSE = []
     dataNoise = []
+    arimaMSE = []
 
     #Convert data to numpy
     linearCasesOnly = bestLinearData['originalCases'].to_numpy()
@@ -184,11 +195,45 @@ def baseline():
         predict = logisticDerivative(timeTrain.reshape(linearCasesTrainX.shape), logistic_model[0], logistic_model[1], logistic_model[2])
         dataNoise.append(np.mean(np.abs(predict-linearCasesTrainX)/linearCasesTrainX))
 
-    plt.plot(np.array(linearMSE).mean(axis=0), label='Mobility (linear, non-temporal)')
+        #fit stacking regressor
+        estimators = [('lr', RidgeCV()),('svr', LinearSVR(random_state=42), ('rf', RandomForestClassifier(n_estimators=10,random_state=42)))]
+        reg = StackingRegressor(estimators=estimators,final_estimator=GaussianProcessRegressor(kernel=DotProduct()+WhiteKernel(),random_state=0))
+        stacking_model = reg.fit(timeTrain, linearCasesTrainX)
+        if showPlot:
+          visualize_cases(stacking_model, timeTrain, linearCasesTrainX, timeTest, linearCasesTestX)
+
+        predict = stacking_model.predict(timeTest)
+        linearCasesMSE.append(np.abs(predict-linearCasesTestX)/linearCasesTestX)
+
+        #fit ARIMA
+        #Perform grid search to determine ARIMA Order
+        #stepwise_fit = auto_arima(linearCasesTrainX, start_p = 1, start_q = 1, 
+        #                  max_p = 3, max_q = 3, m = 12, 
+        #                  start_P = 0, seasonal = True, 
+        #                  d = None, D = 1, trace = True, 
+        #                  error_action ='ignore',   # we don't want to know if an order does not work 
+        #                  suppress_warnings = True,  # we don't want convergence warnings 
+        #                  stepwise = True)           # set to stepwise 
+        #stepwise_fit.summary() 
+
+        model = SARIMAX(linearCasesTrainX,  
+                order = (1, 0, 1),  
+                seasonal_order =(2, 1, 0, 12)) 
+  
+        result = model.fit(disp=False) 
+        if showPlot:
+            visualize_ARIMA(result, timeTrain, linearCasesTrainX, timeTest, linearCasesTestX)
+
+        predict = result.predict(61, 90, typ = 'levels')
+        arimaMSE.append(np.abs(predict-linearCasesTestX)/linearCasesTestX)
+
+
+    #plt.plot(np.array(linearMSE).mean(axis=0), label='Mobility (linear, non-temporal)')
     plt.plot(np.array(logMSEAdj).mean(axis=0), label='Mobility (logarithmic, non-temporal)')
-    plt.plot(np.array(linearCasesMSE).mean(axis=0), label='Cases (linear, temporal)')
+    #plt.plot(np.array(linearCasesMSE).mean(axis=0), label='Cases (linear, temporal)')
     plt.plot(np.array(logCasesMSE).mean(axis=0), label='Cases (logarithmic temporal)')
     plt.plot(np.array(logisticMSE).mean(axis=0), label='Cases (logistic temporal)')
+    plt.plot(np.array(arimaMSE).mean(axis=0), label='Cases (ARIMA)')
     plt.xlabel("Days in advance to predict")
     plt.ylabel("Percent deviation from true value")
     plt.legend(loc="upper left")
@@ -213,6 +258,14 @@ def visualize_logistic(model, trainX, trainy, testX, testy):
   x=np.linspace(min(np.min(trainX),np.min(testX)),max(np.max(trainX),np.max(testX)),100).reshape(-1, 1)
   plt.scatter(x,logisticDerivative(x, model[0], model[1], model[2]))
   plt.show()
+
+def visualize_ARIMA(model, trainX, trainy, testX, testy):
+    full_predictions = model.predict(1, 91, typ = 'levels')
+
+    plt.plot(full_predictions)
+    plt.scatter(trainX,trainy)
+    plt.scatter(testX,testy)
+    plt.show()
 
 if __name__ == '__main__':
     baseline()
