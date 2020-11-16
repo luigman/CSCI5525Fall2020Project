@@ -114,6 +114,7 @@ def baseline():
     logisticMSE = []
     dataNoise = []
     arimaMSE = []
+    gaussMSE = []
 
     #Convert data to numpy
     linearCasesOnly = bestLinearData['originalCases'].to_numpy()
@@ -121,7 +122,7 @@ def baseline():
     bestLinearData = bestLinearData.to_numpy()
     bestLogData = bestLogData.to_numpy()
 
-    stride = 1 #trains a new model every {stride} days
+    stride = 10 #trains a new model every {stride} days
     maxEpoch = 100
 
     for t in range((min(bestLinearData.shape[0], bestLogData.shape[0])-90)//stride):
@@ -189,8 +190,8 @@ def baseline():
         if showPlot:
           visualize_logistic(logistic_model, timeTrain, linearCasesTrainX, timeTest, linearCasesTestX)
 
-        predict = logisticDerivative(timeTest.reshape(linearCasesTestX.shape), logistic_model[0], logistic_model[1], logistic_model[2])
-        logisticMSE.append(np.abs(predict-linearCasesTestX)/linearCasesTestX)
+        predictLogistic = logisticDerivative(timeTest.reshape(linearCasesTestX.shape), logistic_model[0], logistic_model[1], logistic_model[2])
+        logisticMSE.append(np.abs(predictLogistic-linearCasesTestX)/linearCasesTestX)
 
         predict = logisticDerivative(timeTrain.reshape(linearCasesTrainX.shape), logistic_model[0], logistic_model[1], logistic_model[2])
         dataNoise.append(np.mean(np.abs(predict-linearCasesTrainX)/linearCasesTrainX))
@@ -224,8 +225,32 @@ def baseline():
         if showPlot:
             visualize_ARIMA(result, timeTrain, linearCasesTrainX, timeTest, linearCasesTestX)
 
-        predict = result.predict(61, 90, typ = 'levels')
-        arimaMSE.append(np.abs(predict-linearCasesTestX)/linearCasesTestX)
+        predictArima = result.predict(61, 90, typ = 'levels')
+        arimaMSE.append(np.abs(predictArima-linearCasesTestX)/linearCasesTestX)
+
+        
+        #Evaluate other models to use as input to gaussian process
+        predictLog = cases_model.predict(np.log(timeTrain)) #Log model
+        predictAdj = np.exp(predictLog)-1 #convert from log back to raw case number
+        predictLogistic = logisticDerivative(timeTrain.reshape(linearCasesTrainX.shape), logistic_model[0], logistic_model[1], logistic_model[2]) #logistic model
+        predictArima = result.predict(1, 60, typ = 'levels') #Arima model
+
+        testLog = cases_model.predict(np.log(timeTest)) #Log model
+        testAdj = np.exp(testLog)-1 #convert from log back to raw case number
+        testLogistic = logisticDerivative(timeTest.reshape(linearCasesTestX.shape), logistic_model[0], logistic_model[1], logistic_model[2]) #logistic model
+        testArima = result.predict(61, 90, typ = 'levels') #Arima model
+
+        #fit gaussian process meta-learner
+        gaussTrain = np.array([predictLogistic, predictArima]).T
+        gaussTest = np.array([testLogistic, testArima]).T
+        reg = GaussianProcessRegressor(kernel=DotProduct()+WhiteKernel(),random_state=0)
+        stacking_model = reg.fit(gaussTrain, linearCasesTrainX)
+        predictTrain = stacking_model.predict(gaussTrain)
+        predictTest = stacking_model.predict(gaussTest)
+        if showPlot:
+          visualize_gauss(np.hstack((predictTrain, predictTest)).T, timeTrain, linearCasesTrainX, timeTest, linearCasesTestX)
+
+        gaussMSE.append(np.abs(predictTest-linearCasesTestX)/linearCasesTestX)
 
 
     #plt.plot(np.array(linearMSE).mean(axis=0), label='Mobility (linear, non-temporal)')
@@ -234,6 +259,7 @@ def baseline():
     plt.plot(np.array(logCasesMSE).mean(axis=0), label='Cases (logarithmic temporal)')
     plt.plot(np.array(logisticMSE).mean(axis=0), label='Cases (logistic temporal)')
     plt.plot(np.array(arimaMSE).mean(axis=0), label='Cases (ARIMA)')
+    plt.plot(np.array(gaussMSE).mean(axis=0), label='Cases (Gaussian Process meta)')
     plt.xlabel("Days in advance to predict")
     plt.ylabel("Percent deviation from true value")
     plt.legend(loc="upper left")
@@ -266,6 +292,13 @@ def visualize_ARIMA(model, trainX, trainy, testX, testy):
     plt.scatter(trainX,trainy)
     plt.scatter(testX,testy)
     plt.show()
+
+def visualize_gauss(predictions, trainX, trainy, testX, testy):
+  plt.scatter(trainX, trainy)
+  plt.scatter(testX, testy)
+  x=np.linspace(min(np.min(trainX),np.min(testX)),max(np.max(trainX),np.max(testX)),100).reshape(-1, 1)
+  plt.scatter(np.vstack((trainX, testX)),predictions)
+  plt.show()
 
 if __name__ == '__main__':
     baseline()
