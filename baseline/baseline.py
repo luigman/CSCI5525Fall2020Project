@@ -11,8 +11,10 @@ from tensorflow.keras.layers.experimental import preprocessing
 
 from sklearn.linear_model import LinearRegression, Ridge, RidgeCV
 
+from scipy import optimize
+
 def baseline():
-    showPlot = True
+    showPlot = False
     np.set_printoptions(precision=3, suppress=True)
 
     mobility_dataframe = pd.read_csv('google_baseline_test.csv', infer_datetime_format=True, parse_dates=True)
@@ -99,6 +101,8 @@ def baseline():
     logMSEAdj = []
     linearCasesMSE = []
     logCasesMSE = []
+    logisticMSE = []
+    dataNoise = []
 
     #Convert data to numpy
     linearCasesOnly = bestLinearData['originalCases'].to_numpy()
@@ -109,29 +113,29 @@ def baseline():
     stride = 1 #trains a new model every {stride} days
     maxEpoch = 100
 
-    for t in range((min(bestLinearData.shape[0], bestLogData.shape[0])-60)//stride):
+    for t in range((min(bestLinearData.shape[0], bestLogData.shape[0])-90)//stride):
         print("Training model:",t)
 
         #Linear Mobility Data
-        linearTrainX = bestLinearData[t*stride:t*stride+30,1:]
-        linearTrainy = bestLinearData[t*stride:t*stride+30,:1]
-        linearTestX = bestLinearData[t*stride+30:t*stride+60,1:]
-        linearTesty = bestLinearData[t*stride+30:t*stride+60,:1]
+        linearTrainX = bestLinearData[t*stride:t*stride+60,1:]
+        linearTrainy = bestLinearData[t*stride:t*stride+60,:1]
+        linearTestX = bestLinearData[t*stride+60:t*stride+90,1:]
+        linearTesty = bestLinearData[t*stride+60:t*stride+90,:1]
 
         #Logarithmic Mobility Data
-        logTrainX = bestLogData[t*stride:t*stride+30,1:]
-        logTrainy = bestLogData[t*stride:t*stride+30,:1]
-        logTestX = bestLogData[t*stride+30:t*stride+60,1:]
-        logTesty = bestLogData[t*stride+30:t*stride+60,:1]
+        logTrainX = bestLogData[t*stride:t*stride+60,1:]
+        logTrainy = bestLogData[t*stride:t*stride+60,:1]
+        logTestX = bestLogData[t*stride+60:t*stride+90,1:]
+        logTesty = bestLogData[t*stride+60:t*stride+90,:1]
 
         #Cases-only data
-        linearCasesTrainX = linearCasesOnly[t*stride:t*stride+30]
-        logCasesTrainX = logCasesOnly[t*stride:t*stride+30]
-        linearCasesTestX = linearCasesOnly[t*stride+30:t*stride+60]
-        logCasesTestX = logCasesOnly[t*stride+30:t*stride+60]
+        linearCasesTrainX = linearCasesOnly[t*stride:t*stride+60]
+        logCasesTrainX = logCasesOnly[t*stride:t*stride+60]
+        linearCasesTestX = linearCasesOnly[t*stride+60:t*stride+90]
+        logCasesTestX = logCasesOnly[t*stride+60:t*stride+90]
 
-        timeTrain = np.arange(1,31).reshape(-1, 1)
-        timeTest = np.arange(31,61).reshape(-1, 1)
+        timeTrain = np.arange(1,61).reshape(-1, 1)
+        timeTest = np.arange(61,91).reshape(-1, 1)
 
         #Uncomment to add time data to mobility dataset
         #linearTrainX = np.hstack((linearTrainX, timeTrain))
@@ -169,20 +173,45 @@ def baseline():
         predictAdj = np.exp(predict)-1 #convert from log back to raw case number
         logCasesMSE.append(np.abs(predictAdj-linearCasesTestX)/linearCasesTestX)
 
+        #fit logistic model
+        logistic_model, cov = optimize.curve_fit(logisticDerivative, timeTrain.reshape(linearCasesTrainX.shape), linearCasesTrainX, p0=[4*np.max(linearCasesTrainX),60,1/30], maxfev=10000, bounds=(np.array([1, 0, 0]), np.array([20000,np.Inf,np.Inf])) )
+        if showPlot:
+          visualize_logistic(logistic_model, timeTrain, linearCasesTrainX, timeTest, linearCasesTestX)
+
+        predict = logisticDerivative(timeTest.reshape(linearCasesTestX.shape), logistic_model[0], logistic_model[1], logistic_model[2])
+        logisticMSE.append(np.abs(predict-linearCasesTestX)/linearCasesTestX)
+
+        predict = logisticDerivative(timeTrain.reshape(linearCasesTrainX.shape), logistic_model[0], logistic_model[1], logistic_model[2])
+        dataNoise.append(np.mean(np.abs(predict-linearCasesTrainX)/linearCasesTrainX))
+
     plt.plot(np.array(linearMSE).mean(axis=0), label='Mobility (linear, non-temporal)')
     plt.plot(np.array(logMSEAdj).mean(axis=0), label='Mobility (logarithmic, non-temporal)')
     plt.plot(np.array(linearCasesMSE).mean(axis=0), label='Cases (linear, temporal)')
     plt.plot(np.array(logCasesMSE).mean(axis=0), label='Cases (logarithmic temporal)')
+    plt.plot(np.array(logisticMSE).mean(axis=0), label='Cases (logistic temporal)')
     plt.xlabel("Days in advance to predict")
     plt.ylabel("Percent deviation from true value")
     plt.legend(loc="upper left")
     plt.show()
+
+    print("Average logistic Test error:", np.mean(dataNoise))
+
+def logisticDerivative(x, a, b, c):
+    y = a*np.exp(c*(b-x))/(1+np.exp(c*(b-x)))**2
+    return y
 
 def visualize_cases(model, trainX, trainy, testX, testy):
   plt.scatter(trainX, trainy)
   plt.scatter(testX, testy)
   x=np.linspace(min(np.min(trainX),np.min(testX)),max(np.max(trainX),np.max(testX)),100).reshape(-1, 1)
   plt.scatter(x,model.predict(x))
+  plt.show()
+
+def visualize_logistic(model, trainX, trainy, testX, testy):
+  plt.scatter(trainX, trainy)
+  plt.scatter(testX, testy)
+  x=np.linspace(min(np.min(trainX),np.min(testX)),max(np.max(trainX),np.max(testX)),100).reshape(-1, 1)
+  plt.scatter(x,logisticDerivative(x, model[0], model[1], model[2]))
   plt.show()
 
 if __name__ == '__main__':
