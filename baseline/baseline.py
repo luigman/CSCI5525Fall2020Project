@@ -122,7 +122,7 @@ def baseline():
     bestLinearData = bestLinearData.to_numpy()
     bestLogData = bestLogData.to_numpy()
 
-    stride = 10 #trains a new model every {stride} days
+    stride = 3 #trains a new model every {stride} days
     maxEpoch = 100
 
     for t in range((min(bestLinearData.shape[0], bestLogData.shape[0])-90)//stride):
@@ -209,7 +209,7 @@ def baseline():
         #fit ARIMA
         #Perform grid search to determine ARIMA Order
         #stepwise_fit = auto_arima(linearCasesTrainX, start_p = 1, start_q = 1, 
-        #                  max_p = 3, max_q = 3, m = 12, 
+        #                  max_p = 3, max_q = 3, m = 7, 
         #                  start_P = 0, seasonal = True, 
         #                  d = None, D = 1, trace = True, 
         #                  error_action ='ignore',   # we don't want to know if an order does not work 
@@ -218,8 +218,8 @@ def baseline():
         #stepwise_fit.summary() 
 
         model = SARIMAX(linearCasesTrainX,  
-                order = (1, 0, 1),  
-                seasonal_order =(2, 1, 0, 12)) 
+                order = (2, 0, 0),  
+                seasonal_order =(2, 1, 0, 7)) 
   
         result = model.fit(disp=False) 
         if showPlot:
@@ -230,19 +230,33 @@ def baseline():
 
         
         #Evaluate other models to use as input to gaussian process
+        arima1 = SARIMAX(linearCasesTrainX, order = (2, 0, 0), seasonal_order =(2, 1, 0, 7)).fit(disp=False)
+        arima2 = SARIMAX(linearCasesTrainX, order = (2, 0, 0), seasonal_order =(2, 1, 1, 7)).fit(disp=False)
+        arima3 = SARIMAX(linearCasesTrainX, order = (1, 1, 0), seasonal_order =(1, 1, 1, 7)).fit(disp=False)
+        arima4 = SARIMAX(linearCasesTrainX, order = (0, 1, 1), seasonal_order =(1, 1, 1, 7)).fit(disp=False)
+        arima5 = SARIMAX(linearCasesTrainX, order = (0, 1, 1), seasonal_order =(2, 1, 0, 7)).fit(disp=False)
+
         predictLog = cases_model.predict(np.log(timeTrain)) #Log model
         predictAdj = np.exp(predictLog)-1 #convert from log back to raw case number
         predictLogistic = logisticDerivative(timeTrain.reshape(linearCasesTrainX.shape), logistic_model[0], logistic_model[1], logistic_model[2]) #logistic model
-        predictArima = result.predict(1, 60, typ = 'levels') #Arima model
+        predictArima1 = arima1.predict(1, 60, typ = 'levels')
+        predictArima2 = arima2.predict(1, 60, typ = 'levels')
+        predictArima3 = arima3.predict(1, 60, typ = 'levels')
+        predictArima4 = arima4.predict(1, 60, typ = 'levels')
+        predictArima5 = arima5.predict(1, 60, typ = 'levels')
 
         testLog = cases_model.predict(np.log(timeTest)) #Log model
         testAdj = np.exp(testLog)-1 #convert from log back to raw case number
         testLogistic = logisticDerivative(timeTest.reshape(linearCasesTestX.shape), logistic_model[0], logistic_model[1], logistic_model[2]) #logistic model
-        testArima = result.predict(61, 90, typ = 'levels') #Arima model
+        testArima1 = arima1.predict(61, 90, typ = 'levels')
+        testArima2 = arima2.predict(61, 90, typ = 'levels')
+        testArima3 = arima3.predict(61, 90, typ = 'levels')
+        testArima4 = arima4.predict(61, 90, typ = 'levels')
+        testArima5 = arima5.predict(61, 90, typ = 'levels')
 
         #fit gaussian process meta-learner
-        gaussTrain = np.array([predictLogistic, predictArima]).T
-        gaussTest = np.array([testLogistic, testArima]).T
+        gaussTrain = np.array([predictLogistic, predictArima1, predictArima2, predictArima3, predictArima4, predictArima5]).T
+        gaussTest = np.array([testLogistic, testArima1, testArima2, testArima3, testArima4, testArima5]).T
         reg = GaussianProcessRegressor(kernel=DotProduct()+WhiteKernel(),random_state=0)
         stacking_model = reg.fit(gaussTrain, linearCasesTrainX)
         predictTrain = stacking_model.predict(gaussTrain)
