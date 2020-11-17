@@ -266,10 +266,17 @@ def baseline():
 
         gaussMSE.append(np.abs(predictTest-linearCasesTestX)/linearCasesTestX)
 
-
-    #plt.plot(np.array(linearMSE).mean(axis=0), label='Mobility (linear, non-temporal)')
-    plt.plot(np.array(logMSEAdj).mean(axis=0), label='Mobility (logarithmic, non-temporal)')
-    #plt.plot(np.array(linearCasesMSE).mean(axis=0), label='Cases (linear, temporal)')
+    #Plot proof-of-concept graph
+    if True:
+      plt.plot(np.array(linearMSE).mean(axis=0), label='Mobility (linear, non-temporal)')
+      plt.plot(np.array(logMSEAdj).mean(axis=0), label='Mobility (logarithmic, non-temporal)')
+      plt.xlabel("Days in advance to predict")
+      plt.ylabel("Percent deviation from true value")
+      plt.legend(loc="upper left")
+      plt.show()
+      
+    #Plot baseline graph
+    #plt.plot(np.array(linearCasesMSE).mean(axis=0), label='Cases (linear, temporal)') #Don't plot because performance is terrible
     plt.plot(np.array(logCasesMSE).mean(axis=0), label='Cases (logarithmic temporal)')
     plt.plot(np.array(logisticMSE).mean(axis=0), label='Cases (logistic temporal)')
     plt.plot(np.array(arimaMSE).mean(axis=0), label='Cases (ARIMA)')
