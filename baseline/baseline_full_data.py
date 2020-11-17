@@ -32,7 +32,11 @@ def baseline(showPlot):
 
     by_state=full_df['sub_region_1'].unique()
     linear_scores_by_state={}
+    lin_avg=0
     log_scores_by_state={}
+    log_avg=0
+    lin_corr_avg=0
+    log_corr_avg=0
 
     for region in by_state:
 
@@ -105,8 +109,16 @@ def baseline(showPlot):
 
         linear_scores_by_state[region]=bestLinearOffset
         log_scores_by_state[region]=bestLogOffset
+        lin_avg+=bestLinearOffset
+        log_avg+=bestLogOffset
+        lin_corr_avg+=np.linalg.norm(bestLinearCorr)
+        log_corr_avg+=np.linalg.norm(bestLogCorr)
     print(linear_scores_by_state)
     print(log_scores_by_state)
+    print(lin_avg/len(by_state))
+    print(log_avg/len(by_state))
+    print(lin_corr_avg/len(by_state))
+    print(log_corr_avg/len(by_state))
 
 
 
