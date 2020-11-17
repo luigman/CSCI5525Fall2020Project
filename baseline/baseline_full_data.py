@@ -55,7 +55,7 @@ def baseline(showPlot):
             #Build new full data array
             mobility_dataframe=temp.drop(columns=['date','sub_region_1', 'num_cases'])
             full_dataframe=pd.concat([cdc_dataframe, mobility_dataframe],axis=1)
-            full_dataframe['originalCases'] = temp['num_cases'] #preserve original case values as additional feature
+            #full_dataframe['originalCases'] = temp['num_cases'] #preserve original case values as additional feature
             full_dataframe=full_dataframe.loc[(full_dataframe['num_cases']!=0)] #remove rows with zero cases
 
             #Compute linear and logatrithmic correlations
