@@ -117,12 +117,12 @@ def create_dataset(avg):
     mobility_df['num_cases']=new_cases_per_state_per_day
 
     if(avg):
-        mobility_df.to_csv('COVID-19_Combined_Mobility_And_Infection_Data_Moving_Avg_updated.csv', index=False)
+        mobility_df.to_csv('COVID-19_Combined_Mobility_And_Infection_Data_Moving_Avg_updated_test.csv', index=False)
     else:
         mobility_df.to_csv('COVID-19_Combined_Mobility_And_Infection_Data_updated.csv', index=False)
 
 
 if __name__ == '__main__':
     #Create dataset
-    #create_dataset(True)
-    create_dataset(False)
+    create_dataset(True)
+    #create_dataset(False)

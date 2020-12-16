@@ -17,7 +17,7 @@ def update_dataset():
 	df1 = merge[merge.isna().any(axis=1)]	
 	merge=merge.interpolate(method='linear')
 
-	merge.to_csv('COVID-19_Combined_Mobility_And_Infection_Data_Moving_Avg_updated.csv', index=False)
+	merge.to_csv('COVID-19_Combined_Mobility_And_Infection_Data_Moving_Avg_updated_lin_int.csv', index=False)
 
 
 if __name__ == '__main__':
