@@ -115,7 +115,6 @@ def create_dataset(avg):
                 new_cases_per_state_per_day.append(np.nan)
 
     mobility_df['num_cases']=new_cases_per_state_per_day
-    mobility_df=mobility_df.dropna()
 
     if(avg):
         mobility_df.to_csv('COVID-19_Combined_Mobility_And_Infection_Data_Moving_Avg_updated.csv', index=False)

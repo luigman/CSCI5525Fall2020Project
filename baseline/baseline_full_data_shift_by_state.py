@@ -51,7 +51,8 @@ def baseline(showPlot):
         full_dataframe=pd.DataFrame()
         for region in by_state:
             temp=full_df.loc[(full_df['sub_region_1']==region)]
-            #Shift CDC data by offset value - this is going to create some problems because we'll have to do if for each state...
+            temp=temp.loc[(temp['date']<'2020-11-20')]
+            #Shift CDC data by offset value
             cdc_dataframe=temp['num_cases'].shift(periods=offset,fill_value=0)
             mobility_dataframe=temp.drop(columns=['date','sub_region_1', 'num_cases'])
             all_states=pd.concat([cdc_dataframe, mobility_dataframe],axis=1)
