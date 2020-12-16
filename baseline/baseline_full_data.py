@@ -107,18 +107,18 @@ def baseline(showPlot):
         print("Best Log Correlation Norm:", np.linalg.norm(bestLogCorr))
         print("Best Log Offset:", bestLogOffset)
 
-        linear_scores_by_state[region]=bestLinearOffset
-        log_scores_by_state[region]=bestLogOffset
-        lin_avg+=bestLinearOffset
-        log_avg+=bestLogOffset
-        lin_corr_avg+=np.linalg.norm(bestLinearCorr)
-        log_corr_avg+=np.linalg.norm(bestLogCorr)
-    print(linear_scores_by_state)
-    print(log_scores_by_state)
-    print(lin_avg/len(by_state))
-    print(log_avg/len(by_state))
-    print(lin_corr_avg/len(by_state))
-    print(log_corr_avg/len(by_state))
+        #linear_scores_by_state[region]=bestLinearOffset
+        #log_scores_by_state[region]=bestLogOffset
+        #lin_avg+=bestLinearOffset
+        #log_avg+=bestLogOffset
+        #lin_corr_avg+=np.linalg.norm(bestLinearCorr)
+        #log_corr_avg+=np.linalg.norm(bestLogCorr)
+    #print(linear_scores_by_state)
+    #print(log_scores_by_state)
+    #print(lin_avg/len(by_state))
+    #print(log_avg/len(by_state))
+    #print(lin_corr_avg/len(by_state))
+    #print(log_corr_avg/len(by_state))
 
 
 
