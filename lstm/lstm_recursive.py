@@ -11,7 +11,7 @@ import random
 #https://machinelearningmastery.com/multi-step-time-series-forecasting/
 
 #IF load is True then it loads in a previously trained model
-LOAD = False
+LOAD = True
 
 #make data stationary just the covid cases number or all the features?
 #subtracts t-1 from t to create stationary data
@@ -166,7 +166,9 @@ def lstm():
     for i in range(0,num_graphs):
         #Create prediction from previous data
         prediction = predict(proc_test_x[i], 14, model)
+        prediction = np.transpose(prediction)
         prediction = np.reshape(prediction, (1,14,7))
+
 
         #combine prediction with previous data to undo normalization/stationarizing
         combined_pred = np.append(proc_test_x[i], prediction)
