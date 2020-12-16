@@ -26,7 +26,7 @@ from scipy import optimize
 def baseline(showPlot):
     np.set_printoptions(precision=3, suppress=True)
 
-    full_df=pd.read_csv('../data/COVID-19_Combined_Mobility_And_Infection_Data_Moving_Avg.csv', infer_datetime_format=True, parse_dates=True)
+    full_df=pd.read_csv('../data/COVID-19_Combined_Mobility_And_Infection_Data_Moving_Avg_updated.csv', infer_datetime_format=True, parse_dates=True)
 
     #=========================FIND BEST OFFSET========================================
 
@@ -95,13 +95,13 @@ def baseline(showPlot):
         plt.title("Logarithmic correlation vs. data offset")
         plt.show()'''
 
-    #print("Best Full Correlation:", bestLinearCorr)
-    #print("Best Full Correlation Norm:", np.linalg.norm(bestLinearCorr))
-    #print("Best Full Offset:", bestLinearOffset)
+    print("Best Full Correlation:", bestLinearCorr)
+    print("Best Full Correlation Norm:", np.linalg.norm(bestLinearCorr))
+    print("Best Full Offset:", bestLinearOffset)
 
-    #print("Best Log Correlation:", bestLogCorr)
-    #print("Best Log Correlation Norm:", np.linalg.norm(bestLogCorr))
-    #print("Best Log Offset:", bestLogOffset)
+    print("Best Log Correlation:", bestLogCorr)
+    print("Best Log Correlation Norm:", np.linalg.norm(bestLogCorr))
+    print("Best Log Offset:", bestLogOffset)
 
     #=========================BEGIN MODEL FITTING========================================
 
@@ -123,7 +123,7 @@ def baseline(showPlot):
     stride = 3 #trains a new model every {stride} days
     maxEpoch = 100
 
-    for t in range((min(bestLinearData.shape[0], bestLogData.shape[0])-90)//stride):
+    '''for t in range((min(bestLinearData.shape[0], bestLogData.shape[0])-90)//stride):
         print("Training model:",t)
 
         #Linear Mobility Data
@@ -284,7 +284,7 @@ def baseline(showPlot):
     plt.legend(loc="upper left")
     plt.show()
 
-    print("Average logistic Test error:", np.mean(dataNoise))
+    print("Average logistic Test error:", np.mean(dataNoise))'''
 
 
 
@@ -323,4 +323,4 @@ def visualize_gauss(predictions, trainX, trainy, testX, testy):
   plt.show()
 
 if __name__ == '__main__':
-    baseline(True)
+    baseline(False)

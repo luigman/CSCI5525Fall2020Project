@@ -5,8 +5,8 @@ import datetime
 
 def create_dataset(avg):
     #Load the csv data from our two different sources
-    mobility_df = pd.read_csv('2020_US_Region_Mobility_Report.csv')
-    cdc_df = pd.read_csv('United_States_COVID-19_Cases_and_Deaths_by_State_over_Time.csv')
+    mobility_df = pd.read_csv('2020_US_Region_Mobility_Report_dec.csv')
+    cdc_df = pd.read_csv('United_States_COVID-19_Cases_and_Deaths_by_State_over_Time_dec.csv')
 
     #clean mobility data
     #get rid of the country_region_code, country_region, metro_area, iso_3166_2_code,census_fips_code
@@ -109,17 +109,21 @@ def create_dataset(avg):
             new_cases_per_state_per_day.append(num_cases/(7*state_pop))
         else:
             match=cdc_df[(cdc_df['submission_date']==date)&(cdc_df['state']==state)]
-            new_cases_per_state_per_day.append((float(match['new_case'].fillna(0))+float(match['pnew_case'].fillna(0)))/state_pop)
+            if(len(match)==1):
+                new_cases_per_state_per_day.append((float(match['new_case'].fillna(0))+float(match['pnew_case'].fillna(0)))/state_pop)
+            else:
+                new_cases_per_state_per_day.append(np.nan)
 
     mobility_df['num_cases']=new_cases_per_state_per_day
+    mobility_df=mobility_df.dropna()
 
     if(avg):
-        mobility_df.to_csv('COVID-19_Combined_Mobility_And_Infection_Data_Moving_Avg.csv', index=False)
+        mobility_df.to_csv('COVID-19_Combined_Mobility_And_Infection_Data_Moving_Avg_updated.csv', index=False)
     else:
-        mobility_df.to_csv('COVID-19_Combined_Mobility_And_Infection_Data.csv', index=False)
+        mobility_df.to_csv('COVID-19_Combined_Mobility_And_Infection_Data_updated.csv', index=False)
 
 
 if __name__ == '__main__':
     #Create dataset
-    create_dataset(True)
+    #create_dataset(True)
     create_dataset(False)
