@@ -27,7 +27,7 @@ def arima():
     
 
     #shift all states data by offset and concatenate in order to prevent bleeding into other states' numbers
-    offset = 14
+    offset = 21
     full_dataframe=pd.DataFrame()
     for region in by_state:
         temp=full_df.loc[(full_df['sub_region_1']==region)]
@@ -53,7 +53,7 @@ def arima():
         linearData = state_data.to_numpy()
         logData = np.log(state_data+1-np.min(state_data.to_numpy())).to_numpy()
         
-        stride = 10 #trains a new model every {stride} days
+        stride = 3 #trains a new model every {stride} days
         percentErrors = []
         timeTrain = np.arange(1,61).reshape(-1, 1)
         timeTest = np.arange(61,91).reshape(-1, 1)
@@ -107,12 +107,12 @@ def arima():
 
             #Use "Last known case value" as bias
             #(I completely made this up but it improved accuracy by ~5%)
-            bias1 = np.ones((30,1))#*linearTrainy[0]
-            bias2 = np.ones((30,1))#*linearTrainy[30]
+            bias1 = np.ones((30,1))*linearTrainy[0]
+            bias2 = np.ones((30,1))*linearTrainy[30]
             bias = np.vstack((bias1, bias2))
             linearTrainX = np.hstack((linearTrainX, bias))
 
-            bias3 = np.ones((60,1))#*linearTrainy[-1]
+            bias3 = np.ones((60,1))*linearTrainy[-1]
             MLPTrainX = np.hstack((MLPTrainX, bias3))
             
             failCounter = 0
@@ -145,17 +145,23 @@ def arima():
                 #print("Percent Error:",percentError)
                 percentErrors.append(percentError)
 
-            if showPlot >= 1 or np.mean(percentError) > 0.4:
+            if showPlot >= 1:# or np.mean(percentError) > 0.4:
                 plt.plot(timeTrain, linearTrainy, label="Past")
                 plt.plot(timeTest, linearTesty, label="True Future")
                 plt.plot(timeTest, y_pred, label="Predicted Future")
-                plt.plot(timeTest, MLPTrainX[0:30,-2], label="Predicted ARIMA (case only)")
+                plt.plot(timeTest, MLPTrainX[0:30,-2], label="Baseline (case only)")
+                plt.title("ARIMA Projected COVID case count")
+                plt.xlabel("Time (days)")
+                plt.ylabel("New Cases per 100,000 people")
                 plt.legend()
                 plt.show()
 
         print("Failed Months:", failedMonths)
         print(np.mean(percentErrors, axis=0))
         plt.plot(np.mean(percentErrors, axis=0).flatten())
+        plt.title("ARIMA Projection accuray")
+        plt.xlabel("Days in advance to predict")
+        plt.ylabel("Percent Error (predicted cases/true cases)")
         plt.show()
     return
 
@@ -165,6 +171,9 @@ def visualize_ARIMA(model, trainX, trainy, testX, testy):
     plt.plot(full_predictions)
     plt.scatter(trainX,trainy)
     plt.scatter(testX,testy)
+    plt.title("ARIMA Projected Mobility Data")
+    plt.xlabel("Time (days)")
+    plt.ylabel("Percent Change From Baseline")
     plt.show()
 
 arima()
