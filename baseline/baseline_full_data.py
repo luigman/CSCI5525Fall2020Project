@@ -87,7 +87,7 @@ def baseline(showPlot):
             correlationScores.append(np.linalg.norm(linearCorr))
             correlationLogScores.append(np.linalg.norm(logCorr))
 
-        '''if showPlot:
+        if showPlot:
             plt.plot(correlationScores)
             plt.xlabel("Cases offset (days)")
             plt.ylabel("Norm of correlation vector")
@@ -97,15 +97,15 @@ def baseline(showPlot):
             plt.xlabel("Cases offset (days)")
             plt.ylabel("Norm of correlation vector")
             plt.title("Logarithmic correlation vs. data offset")
-            plt.show()'''
+            plt.show()
 
-        '''print("Best Full Correlation:", bestLinearCorr)
+        print("Best Full Correlation:", bestLinearCorr)
         print("Best Full Correlation Norm:", np.linalg.norm(bestLinearCorr))
         print("Best Full Offset:", bestLinearOffset)
 
         print("Best Log Correlation:", bestLogCorr)
         print("Best Log Correlation Norm:", np.linalg.norm(bestLogCorr))
-        print("Best Log Offset:", bestLogOffset)'''
+        print("Best Log Offset:", bestLogOffset)
 
         linear_scores_by_state[region]=bestLinearOffset
         log_scores_by_state[region]=bestLogOffset
@@ -113,8 +113,8 @@ def baseline(showPlot):
         log_avg+=bestLogOffset
         lin_corr_avg+=np.linalg.norm(bestLinearCorr)
         log_corr_avg+=np.linalg.norm(bestLogCorr)
-    #print(linear_scores_by_state)
-    #print(log_scores_by_state)
+    print(linear_scores_by_state)
+    print(log_scores_by_state)
     print(lin_avg/len(by_state))
     print(log_avg/len(by_state))
     print(lin_corr_avg/len(by_state))
@@ -173,7 +173,6 @@ def baseline(showPlot):
         maxEpoch = 100
 
         for t in range((min(bestLinearData.shape[0], bestLogData.shape[0])-90)//stride):
-            #print("Size of training:", range((min(bestLinearData.shape[0], bestLogData.shape[0])-90)//stride))
             print("Training model:",t)
             print("State:", by_state[s])
 
@@ -219,7 +218,7 @@ def baseline(showPlot):
         
             #fit linear cases only model
             cases_model = RidgeCV(cv=3).fit(timeTrain, linearCasesTrainX)
-            if False:
+            if showPlot:
                 visualize_cases(cases_model, timeTrain, linearCasesTrainX, timeTest, linearCasesTestX)
 
             predict = cases_model.predict(timeTest)
@@ -227,7 +226,7 @@ def baseline(showPlot):
 
             #fit log cases only model
             cases_model = RidgeCV(cv=3).fit(np.log(timeTrain), logCasesTrainX)
-            if False:
+            if showPlot:
                 visualize_cases(cases_model, np.log(timeTrain), logCasesTrainX, np.log(timeTest), logCasesTestX)
 
             predict = cases_model.predict(np.log(timeTest))
@@ -236,7 +235,7 @@ def baseline(showPlot):
 
             #fit logistic model
             logistic_model, cov = optimize.curve_fit(logisticDerivative, timeTrain.reshape(linearCasesTrainX.shape), linearCasesTrainX, p0=[4*np.max(linearCasesTrainX),60,1/30], maxfev=10000, bounds=(np.array([1, 0, 0]), np.array([20000,np.Inf,np.Inf])) )
-            if False:
+            if showPlot:
                 visualize_logistic(logistic_model, timeTrain, linearCasesTrainX, timeTest, linearCasesTestX)
 
             predictLogistic = logisticDerivative(timeTest.reshape(linearCasesTestX.shape), logistic_model[0], logistic_model[1], logistic_model[2])
@@ -249,7 +248,7 @@ def baseline(showPlot):
             estimators = [('lr', RidgeCV()),('svr', LinearSVR(random_state=42), ('rf', RandomForestClassifier(n_estimators=10,random_state=42)))]
             reg = StackingRegressor(estimators=estimators,final_estimator=GaussianProcessRegressor(kernel=DotProduct()+WhiteKernel(),random_state=0))
             stacking_model = reg.fit(timeTrain, linearCasesTrainX)
-            if False:
+            if showPlot:
                 visualize_cases(stacking_model, timeTrain, linearCasesTrainX, timeTest, linearCasesTestX)
 
             predict = stacking_model.predict(timeTest)
@@ -311,7 +310,7 @@ def baseline(showPlot):
             stacking_model = reg.fit(gaussTrain, linearCasesTrainX)
             predictTrain = stacking_model.predict(gaussTrain)
             predictTest = stacking_model.predict(gaussTest)
-            if False:
+            if showPlot:
                 visualize_gauss(np.hstack((predictTrain, predictTest)).T, timeTrain, linearCasesTrainX, timeTest, linearCasesTestX)
 
             gaussMSE.append(np.abs(predictTest-linearCasesTestX)/linearCasesTestX)
