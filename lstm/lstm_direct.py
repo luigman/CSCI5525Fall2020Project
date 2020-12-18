@@ -9,7 +9,7 @@ import random
 #https://machinelearningmastery.com/multi-step-time-series-forecasting-long-short-term-memory-networks-python/#:~:text=The%20Long%20Short%2DTerm%20Memory,useful%20for%20time%20series%20forecasting.
 #different methods for forecasting
 #https://machinelearningmastery.com/multi-step-time-series-forecasting/
-LOAD = True
+
 #make data stationary just the covid cases number or all the features?
 #subtracts t-1 from t to create stationary data
 def stationary(data):
@@ -24,21 +24,15 @@ def stationary(data):
 
 #normalize all of the features between -1 and 1
 def normalize(data, min_vals, max_vals):
-    #normalize between -1 and 1
     normalized_data = np.zeros(np.shape(data))
     for i in range(0,len(data)):
         for j in range(0,len(data[0])):
-            #normalized_data[i][j] = (((data[i][j] - min_vals) / (max_vals - min_vals)) * 2) - 1
             normalized_data[i][j] = ((data[i][j] - min_vals) / (max_vals - min_vals))
-    #print(min_vals)
-    #print(max_vals)
     return normalized_data, min_vals, max_vals
 
 #record initial starting point, add change to starting point for each timestep to rebuild data
 def undo_stationary(data, start_point):
-    print(np.shape(data))
     stationary_data = np.zeros((np.shape(data)[0], np.shape(data)[1] + 1, np.shape(data)[2]))
-    print(np.shape(stationary_data))
     for i in range(0,len(data)):
         stationary_data[i][0] = start_point[i]
         for j in range(1,len(stationary_data[0])):
@@ -49,7 +43,6 @@ def undo_normalize(norm_data, min_vals, max_vals):
     undo_normalized_data = np.zeros(np.shape(norm_data))
     for i in range(0,len(norm_data)):
         for j in range(0,len(norm_data[0])):
-            #undo_normalized_data[i][j] = (((norm_data[i][j] + 1.0) / 2.0) * (max_vals - min_vals)) + min_vals
             undo_normalized_data[i][j] = ((norm_data[i][j]) * (max_vals - min_vals)) + min_vals
     return undo_normalized_data
 
@@ -97,16 +90,12 @@ def lstm():
     #For now replace nan with 0 but in future replace with avg of before and after nan?
     print("Number of nan in data to be replaced with 0: ", np.count_nonzero(np.isnan(data)))
     data = np.nan_to_num(data)
-    print(np.shape(data))
 
 
     #Create training and labels for lstm by sampling from longer sequence of 266 Days
     #takes 1000 samples of 20 day segments and the 21st day is the label
     TT_SPLIT = 240
     train_x, test_x = np.split(data, [TT_SPLIT], 1)
-
-    #Trying splitting and training from 45 states, while testing with 5 states
-    #train_x, test_x = np.split(data, [45], 0)
 
     #Get training data from sampling from larger time series
     train_sample_x, train_sample_y = sample(train_x, 4000, 20)
@@ -117,22 +106,17 @@ def lstm():
     #combine X and y to normalize and stationarize training
     combined = np.append(train_sample_x, train_sample_y, 1)
 
-    #obtain min and max values for normalizing
-    # min_vals = np.ndarray.min(combined,(0,1))
-    # max_vals = np.ndarray.max(combined,(0,1))
-    # print(min_vals)
-    # print(max_vals)
-
     min_vals = np.ndarray.min(data,(0,1))
     max_vals = np.ndarray.max(data,(0,1))
-    print(min_vals)
-    print(max_vals)
 
     #normalize data
     normalized_data, min, max = normalize(combined, min_vals, max_vals)
 
     #obtain processed data by splitting again
     proc_train_x, proc_train_y = np.split(normalized_data, [20], 1)
+
+    #because its training directly for final step, set all mobility values to 0 for
+    #label so network only trains on case number
     for i in range(0,len(proc_train_y)):
         for j in range(0,len(proc_train_y[0])):
             proc_train_y[i][j] = [0,0,0,0,0,0,proc_train_y[i][j][6]]
@@ -143,8 +127,6 @@ def lstm():
     model.add(tf.keras.layers.LSTM(20, input_shape=(len(proc_train_x[0]), 7), return_sequences=True))
     model.add(tf.keras.layers.Dropout(0.2))
     model.add(tf.keras.layers.LSTM(10, return_sequences=False))
-    #model.add(tf.keras.layers.Dropout(0.2))
-    #model.add(tf.keras.layers.LSTM(20, return_sequences=False))
     model.add(tf.keras.layers.Dense(7))
 
     #compile model
@@ -153,6 +135,7 @@ def lstm():
     print(model.summary())
 
     #if LOAD is true then load in previous model, else fit a new one
+    LOAD = True
     if LOAD == True:
         model = tf.keras.models.load_model('lstm_direct_model')
     else:
@@ -169,34 +152,26 @@ def lstm():
     proc_test_x, proc_test_y = np.split(normalized_data_test, [20], 1)
 
 
-
-    num_graphs = 20
+    #Generate plots for sample predictions
+    print("GENERATING SAMPLE PREDICTION PLOTS")
+    num_graphs = 10
     for i in range(0,num_graphs):
-        #prediction = predict(proc_test_x[i], 15, model)
-        #prediction = np.reshape(prediction, (1,15,7))
-        print(np.shape(proc_test_x[i]))
         proc_test = np.reshape(proc_test_x[i], (1,20,7))
         prediction = model.predict(proc_test)
-        print(np.shape(prediction))
         prediction = np.reshape(prediction,(1,1,7))
         undo_norm = undo_normalize(prediction, min, max)
-        #undo_stat = undo_stationary(undo_norm, start_point_test[i])
-        print(undo_norm)
 
-
-        #plot_final = np.transpose(undo_norm)
         plot_real = np.transpose(test_sample_x[i])
-        #plot_prev = np.transpose(prev_8)
         plt.clf()
-        #np.split(plot_real, [20], )
+        plt.title('LSTM Projected COVID case count')
+        plt.xlabel('Time(days)')
+        plt.ylabel('New cases per 100,000 people')
+
         plt.plot(plot_real[6])
         plt.axvline(x=20,color='green', linestyle='dashed')
-        #plt.plot(plot_final[6][:20], '--')
-        #plt.plot(plot_final[6][-1])
         plt.plot([38], [undo_norm[0][0][6]], marker='o', markersize=3, color="red")
-        #plt.plot(plot_prev[0],plot_prev[1])
-        #plt.savefig('prediction.png')
-        plt.savefig('prediction{0}.png'.format(i))
+        plt.savefig('direct_prediction_sample_{0}.png'.format(i))
+
 
     #get mean value of # of cases off of actual value
     diff_sum = 0.0
@@ -213,37 +188,36 @@ def lstm():
 
         difference_base = abs(test_sample_x[i,19,6] - test_sample_x[i,-1,6])
         diff_base += difference_base
-    print("average off from actual: ")
+    print("PERCENT DEVIATION FROM TRUE VALUE: ")
     print(diff_sum / len(proc_test_x))
-    print("last data observed data point avg off: ")
-    print(diff_base / len(proc_test_x))
 
 
-    #Print predictions for full state test
-    for state_ind in range(0,51):
-        normalized_state, min, max = normalize(test_x, min_vals, max_vals)
-        predictions = np.zeros((len(test_x[state_ind])-38,2))
-        for i in range(0,len(test_x[state_ind])-38):
-            proc_test = np.reshape(normalized_state[state_ind][i:i+20], (1,20,7))
-            prediction = model.predict(proc_test)
-            #print(prediction)
-            predictions[i][0] = i+38
-            predictions[i][1] = prediction[0][6]
 
-
-        plt.clf()
-        #np.split(plot_real, [20], )
-        #print(np.transpose(normalized_state[state_ind])[6])
-        plt.plot(np.transpose(normalized_state[state_ind])[6])
-        #plt.plot(plot_final[6][:20], '--')
-        #plt.plot(plot_final[6][-1])
-        predictions = np.transpose(predictions)
-        plt.plot(predictions[0], predictions[1])
-        plt.axvline(x=20,color='green', linestyle='dashed')
-        plt.axvline(x=38,color='green', linestyle='dashed')
-        #plt.plot(plot_prev[0],plot_prev[1])
-        #plt.savefig('prediction.png')
-        plt.savefig('state{0}.png'.format(states[state_ind]))
+    # #Print predictions for full state test
+    # normalized_state, min, max = normalize(test_x, min_vals, max_vals)
+    # for state_ind in range(0,51):
+    #     predictions = np.zeros((len(test_x[state_ind])-38,2))
+    #     for i in range(0,len(test_x[state_ind])-38):
+    #         proc_test = np.reshape(normalized_state[state_ind][i:i+20], (1,20,7))
+    #         prediction = model.predict(proc_test)
+    #         prediction = np.reshape(prediction,(1,1,7))
+    #         prediction = undo_normalize(prediction, min_vals, max_vals)
+    #         predictions[i][0] = i+38
+    #         predictions[i][1] = prediction[0][0][6]
+    #
+    #     plt.clf()
+    #     state = np.asarray(normalized_state)
+    #     state = undo_normalize(state, min_vals, max_vals)
+    #     plt.plot(np.transpose(state[state_ind])[6], label='Real Data')
+    #     predictions = np.transpose(predictions)
+    #     plt.plot(predictions[0], predictions[1], label='Predicted Future', marker='.', linestyle="None")
+    #     plt.title('Direct LSTM Projected COVID case count')
+    #     plt.xlabel('Time(days)')
+    #     plt.ylabel('New Cases per 100,000 people')
+    #     plt.axvline(x=20,color='green', linestyle='dashed')
+    #     plt.axvline(x=38,color='green', linestyle='dashed')
+    #     plt.legend(loc="upper left")
+    #     plt.savefig('state{0}.png'.format(states[state_ind]))
 
 
 if __name__ == '__main__':
