@@ -49,6 +49,7 @@ def baseline(showPlot):
         min_dim=100
         for region in by_state:
             temp=full_df.loc[(full_df['sub_region_1']==region)]
+            temp=temp.loc[(temp['date']>'2020-05-01')]
             #Shift CDC data by offset value
             cdc_dataframe=temp['num_cases'].shift(periods=offset,fill_value=0)
             mobility_dataframe=temp.drop(columns=['date','sub_region_1', 'num_cases'])
@@ -105,7 +106,7 @@ def baseline(showPlot):
     print("Best Log Correlation Norm:", np.linalg.norm(bestLogCorr))
     print("Best Log Offset:", bestLogOffset)
 
-    #num_models=(min(min_all_states_lin_dim, min_all_states_log_dim)-90)//3
+    #num_models=(min(min_all_states_lin_dim, min_all_states_log_dim)-111)//3
 
     linearMSE_by_state = []
     logMSEAdj_by_state = []
@@ -156,31 +157,31 @@ def baseline(showPlot):
         stride = 3 #trains a new model every {stride} days
         maxEpoch = 100
 
-        for t in range((min(bestLinearData.shape[0], bestLogData.shape[0])-90)//stride):
-            #print("Size of training:", range((min(bestLinearData.shape[0], bestLogData.shape[0])-90)//stride))
+        for t in range((min(bestLinearData.shape[0], bestLogData.shape[0])-111)//stride):
+            #print("Size of training:", range((min(bestLinearData.shape[0], bestLogData.shape[0])-111)//stride))
             print("Training model:",t)
             print("State:", by_state[s])
 
             #Linear Mobility Data
             linearTrainX = bestLinearData[t*stride:t*stride+60,1:]
             linearTrainy = bestLinearData[t*stride:t*stride+60,:1]
-            linearTestX = bestLinearData[t*stride+60:t*stride+90,1:]
-            linearTesty = bestLinearData[t*stride+60:t*stride+90,:1]
+            linearTestX = bestLinearData[t*stride+60:t*stride+111,1:]
+            linearTesty = bestLinearData[t*stride+60:t*stride+111,:1]
 
             #Logarithmic Mobility Data
             logTrainX = bestLogData[t*stride:t*stride+60,1:]
             logTrainy = bestLogData[t*stride:t*stride+60,:1]
-            logTestX = bestLogData[t*stride+60:t*stride+90,1:]
-            logTesty = bestLogData[t*stride+60:t*stride+90,:1]
+            logTestX = bestLogData[t*stride+60:t*stride+111,1:]
+            logTesty = bestLogData[t*stride+60:t*stride+111,:1]
 
             #Cases-only data
             linearCasesTrainX = linearCasesOnly[t*stride:t*stride+60]
             logCasesTrainX = logCasesOnly[t*stride:t*stride+60]
-            linearCasesTestX = linearCasesOnly[t*stride+60:t*stride+90]
-            logCasesTestX = logCasesOnly[t*stride+60:t*stride+90]
+            linearCasesTestX = linearCasesOnly[t*stride+60:t*stride+111]
+            logCasesTestX = logCasesOnly[t*stride+60:t*stride+111]
 
             timeTrain = np.arange(1,61).reshape(-1, 1)
-            timeTest = np.arange(61,91).reshape(-1, 1)
+            timeTest = np.arange(61,112).reshape(-1, 1)
 
             #Uncomment to add time data to mobility dataset
             #linearTrainX = np.hstack((linearTrainX, timeTrain))
@@ -256,10 +257,10 @@ def baseline(showPlot):
                     seasonal_order =(2, 1, 0, 7)) 
   
             result = model.fit(disp=False) 
-            if False:
+            if True:
                 visualize_ARIMA(result, timeTrain, linearCasesTrainX, timeTest, linearCasesTestX)
 
-            predictArima = result.predict(61, 90, typ = 'levels')
+            predictArima = result.predict(61, 111, typ = 'levels')
             arimaMSE.append(np.abs(predictArima-linearCasesTestX)/linearCasesTestX)
 
         
@@ -282,11 +283,11 @@ def baseline(showPlot):
             testLog = cases_model.predict(np.log(timeTest)) #Log model
             testAdj = np.exp(testLog)-1 #convert from log back to raw case number
             testLogistic = logisticDerivative(timeTest.reshape(linearCasesTestX.shape), logistic_model[0], logistic_model[1], logistic_model[2]) #logistic model
-            testArima1 = arima1.predict(61, 90, typ = 'levels')
-            testArima2 = arima2.predict(61, 90, typ = 'levels')
-            testArima3 = arima3.predict(61, 90, typ = 'levels')
-            testArima4 = arima4.predict(61, 90, typ = 'levels')
-            testArima5 = arima5.predict(61, 90, typ = 'levels')
+            testArima1 = arima1.predict(61, 111, typ = 'levels')
+            testArima2 = arima2.predict(61, 111, typ = 'levels')
+            testArima3 = arima3.predict(61, 111, typ = 'levels')
+            testArima4 = arima4.predict(61, 111, typ = 'levels')
+            testArima5 = arima5.predict(61, 111, typ = 'levels')
 
             #fit gaussian process meta-learner
             gaussTrain = np.array([predictLogistic, predictArima1, predictArima2, predictArima3, predictArima4, predictArima5]).T
@@ -301,14 +302,14 @@ def baseline(showPlot):
             gaussMSE.append(np.abs(predictTest-linearCasesTestX)/linearCasesTestX)
 
         #Append to state totals
-        linearMSE_by_state.append(np.reshape(np.array(linearMSE).mean(axis=0), (30)))
-        logMSEAdj_by_state.append(np.reshape(np.array(logMSEAdj).mean(axis=0), (30)))
-        linearCasesMSE_by_state.append(np.reshape(np.array(linearCasesMSE).mean(axis=0), (30)))
-        logCasesMSE_by_state.append(np.reshape(np.array(logCasesMSE).mean(axis=0), (30)))
-        logisticMSE_by_state.append(np.reshape(np.array(logisticMSE).mean(axis=0), (30)))
+        linearMSE_by_state.append(np.reshape(np.array(linearMSE).mean(axis=0), (51)))
+        logMSEAdj_by_state.append(np.reshape(np.array(logMSEAdj).mean(axis=0), (51)))
+        linearCasesMSE_by_state.append(np.reshape(np.array(linearCasesMSE).mean(axis=0), (51)))
+        logCasesMSE_by_state.append(np.reshape(np.array(logCasesMSE).mean(axis=0), (51)))
+        logisticMSE_by_state.append(np.reshape(np.array(logisticMSE).mean(axis=0), (51)))
         dataNoise_by_state.append(np.mean(dataNoise))
-        arimaMSE_by_state.append(np.reshape(np.array(arimaMSE).mean(axis=0), (30)))
-        gaussMSE_by_state.append(np.reshape(np.array(gaussMSE).mean(axis=0), (30)))
+        arimaMSE_by_state.append(np.reshape(np.array(arimaMSE).mean(axis=0), (51)))
+        gaussMSE_by_state.append(np.reshape(np.array(gaussMSE).mean(axis=0), (51)))
         print("Average logistic Test error:", np.mean(dataNoise))
 
     #Plot proof-of-concept graph
@@ -352,11 +353,14 @@ def visualize_logistic(model, trainX, trainy, testX, testy):
   plt.show()
 
 def visualize_ARIMA(model, trainX, trainy, testX, testy):
-    full_predictions = model.predict(1, 91, typ = 'levels')
+    full_predictions = model.predict(1, 112, typ = 'levels')
 
     plt.plot(full_predictions)
     plt.scatter(trainX,trainy)
     plt.scatter(testX,testy)
+    plt.title("ARIMA Projection of COVID case numbers")
+    plt.xlabel("Time (days)")
+    plt.ylabel("Number of cases per 100,000 people")
     plt.show()
 
 def visualize_gauss(predictions, trainX, trainy, testX, testy):
