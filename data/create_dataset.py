@@ -125,4 +125,4 @@ def create_dataset(avg):
 if __name__ == '__main__':
     #Create dataset
     create_dataset(True)
-    #create_dataset(False)
+    create_dataset(False)

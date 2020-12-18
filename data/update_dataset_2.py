@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-
+#Replace the missing feature values with the mode of the feature column
 def update_datset():
 	df = pd.read_csv('COVID-19_Combined_Mobility_And_Infection_Data_Moving_Avg_updated_test.csv')
 

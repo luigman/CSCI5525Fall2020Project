@@ -2,6 +2,8 @@ import pandas as pd
 import numpy as np
 import datetime
 
+#The old dataset already has feature values pulled in
+#Merge with that dataset and replace any new missing features using linear interpolation
 def update_dataset():
 	merge=pd.DataFrame()
 	df_old = pd.read_csv('COVID-19_Combined_Mobility_And_Infection_Data_Moving_Avg.csv')
