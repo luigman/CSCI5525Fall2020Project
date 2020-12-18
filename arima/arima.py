@@ -27,7 +27,7 @@ def arima():
     
 
     #shift all states data by offset and concatenate in order to prevent bleeding into other states' numbers
-    offset = 14
+    offset = 21
     full_dataframe=pd.DataFrame()
     for region in by_state:
         temp=full_df.loc[(full_df['sub_region_1']==region)]
@@ -53,12 +53,12 @@ def arima():
         linearData = state_data.to_numpy()
         logData = np.log(state_data+1-np.min(state_data.to_numpy())).to_numpy()
         
-        stride = 10 #trains a new model every {stride} days
+        stride = 3 #trains a new model every {stride} days
         percentErrors = []
         timeTrain = np.arange(1,61).reshape(-1, 1)
         timeTest = np.arange(61,91).reshape(-1, 1)
 
-        for t in range((min(linearData.shape[0], logData.shape[0])-90)//stride):
+        for t in range(20,(min(linearData.shape[0], logData.shape[0])-90)//stride):
             #Linear Mobility Data
             linearTrainX = linearData[t*stride:t*stride+60,1:]
             linearTrainy = linearData[t*stride:t*stride+60,:1]
@@ -129,6 +129,7 @@ def arima():
                 model.compile(optimizer='adam',loss='mean_squared_error', metrics=['accuracy'])
                 model.fit(linearTrainX, linearTrainy, epochs=100, verbose=0)
 
+                y_pred_train = model.predict(linearTrainX)
                 y_pred = model.predict(MLPTrainX)[0:30]
                 if np.sum(y_pred==0) == 0:
                     break
@@ -139,23 +140,35 @@ def arima():
                     percentError = 1
                     print("Could not train model on this data")
             if failCounter != maxFail:
-                error = y_pred-linearTesty
-                percentError = np.abs(error/linearTesty).T
+                errorTest = y_pred-linearTesty
+                errorPrev = (y_pred_train-linearTrainy)[-21:]
+                percentErrorTest = np.abs(errorTest/linearTesty).T
+                percentErrorPrev = np.abs(errorPrev/linearTrainy[-21:]).T
+
+                percentError = np.hstack((percentErrorPrev,percentErrorTest))
+                print(percentError.shape)
                 print("Loss:", np.mean(percentError))
                 #print("Percent Error:",percentError)
                 percentErrors.append(percentError)
 
-            if showPlot >= 1 or np.mean(percentError) > 0.4:
+            if showPlot >= 1:# or np.mean(percentError) > 0.4:
+                #plt.plot(timeTrain, y_pred_train, label="Predicted Past")
                 plt.plot(timeTrain, linearTrainy, label="Past")
                 plt.plot(timeTest, linearTesty, label="True Future")
                 plt.plot(timeTest, y_pred, label="Predicted Future")
-                plt.plot(timeTest, MLPTrainX[0:30,-2], label="Predicted ARIMA (case only)")
+                plt.plot(timeTest, MLPTrainX[0:30,-2], label="Baseline (case only)")
+                plt.title("ARIMA Projected COVID case count")
+                plt.xlabel("Time (days)")
+                plt.ylabel("New Cases per 100,000 people")
                 plt.legend()
                 plt.show()
 
         print("Failed Months:", failedMonths)
         print(np.mean(percentErrors, axis=0))
         plt.plot(np.mean(percentErrors, axis=0).flatten())
+        plt.title("ARIMA Projection accuray")
+        plt.xlabel("Days in advance to predict")
+        plt.ylabel("Percent Error (predicted cases/true cases)")
         plt.show()
     return
 
@@ -165,6 +178,9 @@ def visualize_ARIMA(model, trainX, trainy, testX, testy):
     plt.plot(full_predictions)
     plt.scatter(trainX,trainy)
     plt.scatter(testX,testy)
+    plt.title("ARIMA Projected Mobility Data")
+    plt.xlabel("Time (days)")
+    plt.ylabel("Percent Change From Baseline")
     plt.show()
 
 arima()
