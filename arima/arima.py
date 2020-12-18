@@ -58,7 +58,7 @@ def arima():
         timeTrain = np.arange(1,61).reshape(-1, 1)
         timeTest = np.arange(61,91).reshape(-1, 1)
 
-        for t in range((min(linearData.shape[0], logData.shape[0])-90)//stride):
+        for t in range(20,(min(linearData.shape[0], logData.shape[0])-90)//stride):
             #Linear Mobility Data
             linearTrainX = linearData[t*stride:t*stride+60,1:]
             linearTrainy = linearData[t*stride:t*stride+60,:1]
@@ -107,12 +107,12 @@ def arima():
 
             #Use "Last known case value" as bias
             #(I completely made this up but it improved accuracy by ~5%)
-            bias1 = np.ones((30,1))*linearTrainy[0]
-            bias2 = np.ones((30,1))*linearTrainy[30]
+            bias1 = np.ones((30,1))#*linearTrainy[0]
+            bias2 = np.ones((30,1))#*linearTrainy[30]
             bias = np.vstack((bias1, bias2))
             linearTrainX = np.hstack((linearTrainX, bias))
 
-            bias3 = np.ones((60,1))*linearTrainy[-1]
+            bias3 = np.ones((60,1))#*linearTrainy[-1]
             MLPTrainX = np.hstack((MLPTrainX, bias3))
             
             failCounter = 0
@@ -129,6 +129,7 @@ def arima():
                 model.compile(optimizer='adam',loss='mean_squared_error', metrics=['accuracy'])
                 model.fit(linearTrainX, linearTrainy, epochs=100, verbose=0)
 
+                y_pred_train = model.predict(linearTrainX)
                 y_pred = model.predict(MLPTrainX)[0:30]
                 if np.sum(y_pred==0) == 0:
                     break
@@ -139,13 +140,19 @@ def arima():
                     percentError = 1
                     print("Could not train model on this data")
             if failCounter != maxFail:
-                error = y_pred-linearTesty
-                percentError = np.abs(error/linearTesty).T
+                errorTest = y_pred-linearTesty
+                errorPrev = (y_pred_train-linearTrainy)[-21:]
+                percentErrorTest = np.abs(errorTest/linearTesty).T
+                percentErrorPrev = np.abs(errorPrev/linearTrainy[-21:]).T
+
+                percentError = np.hstack((percentErrorPrev,percentErrorTest))
+                print(percentError.shape)
                 print("Loss:", np.mean(percentError))
                 #print("Percent Error:",percentError)
                 percentErrors.append(percentError)
 
             if showPlot >= 1:# or np.mean(percentError) > 0.4:
+                #plt.plot(timeTrain, y_pred_train, label="Predicted Past")
                 plt.plot(timeTrain, linearTrainy, label="Past")
                 plt.plot(timeTest, linearTesty, label="True Future")
                 plt.plot(timeTest, y_pred, label="Predicted Future")
