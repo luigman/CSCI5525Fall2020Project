@@ -26,87 +26,17 @@ from scipy import optimize
 def baseline(showPlot):
     np.set_printoptions(precision=3, suppress=True)
 
-    full_df=pd.read_csv('../data/COVID-19_Combined_Mobility_And_Infection_Data_Moving_Avg_updated_lin_int.csv', infer_datetime_format=True, parse_dates=True)
+    full_df=pd.read_csv('../data/COVID-19_Combined_Mobility_And_Infection_Data_Moving_Avg_updated_mode.csv', infer_datetime_format=True, parse_dates=True)
 
     #=========================FIND BEST OFFSET========================================
 
     by_state=full_df['sub_region_1'].unique()
-    bestLinearCorr = 0
-    bestLogCorr = 0
-    bestLinearOffset = -1
-    bestLogOffset = -1
-    bestLinearData = 0
-    bestLogData = 0
-    #min_all_states_lin_dim=100
-    #min_all_states_log_dim=100
-
-    correlationScores = []
-    correlationLogScores = []
-
-    for offset in range(30):
-        #shift all states data by offset and concatenate in order to prevent bleeding into other states' numbers
-        full_dataframe=pd.DataFrame()
-        min_dim=100
-        for region in by_state:
-            temp=full_df.loc[(full_df['sub_region_1']==region)]
-            #Shift CDC data by offset value
-            cdc_dataframe=temp['num_cases'].shift(periods=offset,fill_value=0)
-            mobility_dataframe=temp.drop(columns=['date','sub_region_1', 'num_cases'])
-            all_states=pd.concat([cdc_dataframe, mobility_dataframe],axis=1)
-            all_states=all_states.loc[(all_states['num_cases']>0)] #remove rows with zero cases
-            full_dataframe=full_dataframe.append(all_states)
-            '''if(all_states.shape[0]<min_dim):
-                min_dim=all_states.shape[0]'''
-
-        #Compute linear and logatrithmic correlations
-        linearCorr = full_dataframe.corr()
-        linearCorr = linearCorr.to_numpy()[0,1:] #Take only correlations between 'cases' and mobility data
-
-        logData = np.log(full_dataframe+1-np.min(full_dataframe.to_numpy()))
-        logCorr = logData.corr()
-        logCorr = logCorr.to_numpy()[0,1:] #Take only correlations between 'cases' and mobility data
-
-        #print("Offset:", offset, "Min_state_dim:    ", min_dim)
-        #print("           Log Correlation:", logCorr)
-
-        #Save best values
-        if np.linalg.norm(linearCorr) > np.linalg.norm(bestLinearCorr):
-            bestLinearCorr = linearCorr
-            bestLinearOffset = offset
-            min_all_states_lin_dim=min_dim
-            #bestLinearData = full_dataframe
-
-        if np.linalg.norm(logCorr) > np.linalg.norm(bestLogCorr):
-            bestLogCorr = logCorr
-            bestLogOffset = offset
-            min_all_states_log_dim=min_dim
-            #bestLogData = logData
-
-        correlationScores.append(np.linalg.norm(linearCorr))
-        correlationLogScores.append(np.linalg.norm(logCorr))
-
-    if showPlot:
-        plt.plot(correlationScores)
-        plt.xlabel("Cases offset (days)")
-        plt.ylabel("Norm of correlation vector")
-        plt.title("Linear correlation vs. data offset")
-        plt.show()
-        plt.plot(correlationLogScores)
-        plt.xlabel("Cases offset (days)")
-        plt.ylabel("Norm of correlation vector")
-        plt.title("Logarithmic correlation vs. data offset")
-        plt.show()
-
-    print("Best Full Correlation:", bestLinearCorr)
-    print("Best Full Correlation Norm:", np.linalg.norm(bestLinearCorr))
-    print("Best Full Offset:", bestLinearOffset)
-
-    print("Best Log Correlation:", bestLogCorr)
-    print("Best Log Correlation Norm:", np.linalg.norm(bestLogCorr))
-    print("Best Log Offset:", bestLogOffset)
-
-    #num_models=(min(min_all_states_lin_dim, min_all_states_log_dim)-90)//3
-
+    linear_scores_by_state={}
+    lin_avg=0
+    log_scores_by_state={}
+    log_avg=0
+    lin_corr_avg=0
+    log_corr_avg=0
     linearMSE_by_state = []
     logMSEAdj_by_state = []
     linearCasesMSE_by_state = []
@@ -115,29 +45,57 @@ def baseline(showPlot):
     dataNoise_by_state = []
     arimaMSE_by_state = []
     gaussMSE_by_state = []
+
     for s in range(len(by_state)):
 
-        #=========================BEGIN MODEL FITTING========================================
-
-        #Get the data for that state and shift it
-        bestLinearData=pd.DataFrame()
-        bestLogDf=pd.DataFrame()
         temp=full_df.loc[(full_df['sub_region_1']==by_state[s])]
-        temp=temp.loc[(temp['date']<'2020-11-30')]
-        #Shift CDC data by offset value
-        cdc_lin_dataframe=temp['num_cases'].shift(periods=bestLinearOffset,fill_value=0)
-        mobility_lin_dataframe=temp.drop(columns=['date','sub_region_1', 'num_cases'])
-        all_lin_states=pd.concat([cdc_lin_dataframe, mobility_lin_dataframe],axis=1)
-        all_lin_states=all_lin_states.loc[(all_lin_states['num_cases']>0)] #remove rows with zero cases
-        bestLinearData=bestLinearData.append(all_lin_states)
-        #Shift CDC data by offset value
-        cdc_log_dataframe=temp['num_cases'].shift(periods=bestLogOffset,fill_value=0)
-        mobility_log_dataframe=temp.drop(columns=['date','sub_region_1', 'num_cases'])
-        all_log_states=pd.concat([cdc_log_dataframe, mobility_log_dataframe],axis=1)
-        all_log_states=all_log_states.loc[(all_log_states['num_cases']>0)] #remove rows with zero cases
-        bestLogDf=bestLogDf.append(all_log_states)
-        bestLogData=np.log(bestLogDf+1-np.min(bestLogDf.to_numpy()))
 
+        bestLinearCorr = 0
+        bestLogCorr = 0
+        bestLinearOffset = -1
+        bestLogOffset = -1
+        bestLinearData = 0
+        bestLogData = 0
+
+        correlationScores = []
+        correlationLogScores = []
+
+        for offset in range(100):
+            #Shift CDC data by offset value - this is going to create some problems because we'll have to do if for each state...
+            cdc_dataframe=temp['num_cases'].shift(periods=offset,fill_value=0)
+
+            #Build new full data array
+            mobility_dataframe=temp.drop(columns=['date','sub_region_1', 'num_cases'])
+            full_dataframe=pd.concat([cdc_dataframe, mobility_dataframe],axis=1)
+            #full_dataframe['originalCases'] = temp['num_cases'] #preserve original case values as additional feature
+            full_dataframe=full_dataframe.loc[(full_dataframe['num_cases']!=0)] #remove rows with zero cases
+
+            #Compute linear and logatrithmic correlations
+            linearCorr = full_dataframe.corr()
+            linearCorr = linearCorr.to_numpy()[0,1:] #Take only correlations between 'cases' and mobility data
+
+            logData = np.log(full_dataframe+1-np.min(full_dataframe.to_numpy()))
+            logCorr = logData.corr()
+            logCorr = logCorr.to_numpy()[0,1:] #Take only correlations between 'cases' and mobility data
+
+            #print("Offset:", offset, "Correlation:    ", linearCorr)
+            #print("           Log Correlation:", logCorr)
+
+            #Save best values
+            if np.linalg.norm(linearCorr) > np.linalg.norm(bestLinearCorr):
+                bestLinearCorr = linearCorr
+                bestLinearOffset = offset
+                bestLinearData = full_dataframe
+
+            if np.linalg.norm(logCorr) > np.linalg.norm(bestLogCorr):
+                bestLogCorr = logCorr
+                bestLogOffset = offset
+                bestLogData = logData
+
+            correlationScores.append(np.linalg.norm(linearCorr))
+            correlationLogScores.append(np.linalg.norm(logCorr))
+
+        #=========================BEGIN MODEL FITTING========================================
         linearMSE = []
         logMSEAdj = []
         linearCasesMSE = []
